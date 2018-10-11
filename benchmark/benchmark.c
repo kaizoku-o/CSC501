@@ -109,6 +109,7 @@ int main(int argc, char *argv[])
         mcontainer_lock(devfd, i);
         printf("Before mcontainer_alloc\n");
         mapped_data = (char *)mcontainer_alloc(devfd, i, max_size_of_objects);
+        printf("Mapped data value is %d\n", mapped_data);
 
         // error handling
         if (!mapped_data)
