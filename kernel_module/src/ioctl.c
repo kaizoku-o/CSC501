@@ -44,6 +44,223 @@
 #include <linux/mutex.h>
 #include <linux/sched.h>
 #include <linux/kthread.h>
+#include <linux/list.h>
+
+//extern struct p_container p_cont;
+//extern struct p_container* find_container(unsigned long cid);
+//extern  struct p_container* add_container(unsigned long cid);
+//extern struct list_head container_list;
+
+/*
+ * Structure for tasks within a container
+ */
+struct p_cont_task
+{
+    int tid;
+    struct list_head list;
+};
+
+/**
+ * Structure for a container
+ */
+struct p_container
+{
+    unsigned long cid;
+    struct p_cont_task* task_head;
+    /* Task counter */
+    int task_counter;
+    struct list_head c_list;
+};
+
+static LIST_HEAD(container_list);
+static DEFINE_MUTEX(container_lock);
+
+struct p_container *find_container(unsigned long cid)
+{
+    struct p_container *c;
+    /* Traverse/loop through the linked list */
+    list_for_each_entry(c, &container_list, c_list)
+        {
+            if (c->cid==cid)
+                {
+                    return c;
+                }
+        }
+    return NULL;
+}
+
+
+/*
+ * display() prints out the container_list
+ */
+void display(void) {
+    struct p_container* tmp_cont;
+    struct list_head* pos;
+
+    printk(KERN_ERR "Printing container list\n");
+    list_for_each(pos, &container_list) {
+        tmp_cont = list_entry(pos, struct p_container, c_list);
+        printk(KERN_INFO "Container id: %lu\n", tmp_cont->cid);
+    }
+}
+
+/**
+ * find the container to which the current task belongs
+ */
+struct p_container* find_container_by_task(void)
+{
+    struct p_container *c;
+    struct p_cont_task *t;
+    list_for_each_entry(c, &container_list,c_list)
+    {
+        struct p_cont_task *task_head = c->task_head;
+        list_for_each_entry(t, &task_head->list, list)
+        {
+            if(t->tid == current->pid)
+                return c;
+        }
+    }
+    return NULL;
+}
+
+/*
+ * Deletes the container whose task_counter is 0
+ */
+bool delete_container_if_empty(struct p_container *curr_container)
+{
+    struct list_head *pos, *q;
+    struct p_container* tmp;
+
+    // Iterate over the container_list to find the curr_container.
+    // Delete it if all tasks in it have been deleted, i.e. task_counter = 0
+    list_for_each_safe(pos, q, &container_list)
+    {
+        tmp = list_entry(pos, struct p_container, c_list);
+
+        //printk(KERN_INFO "Container task counter is %d", tmp->task_counter);
+        if ((tmp->cid == curr_container->cid)
+            && (tmp->task_counter == 0))
+        {
+            list_del(pos);
+            printk(KERN_INFO "Deleted container with id: %lu", tmp->cid);
+            kfree(tmp);
+            //display();
+            return true;
+        }
+    }
+    return false;
+}
+
+int memory_container_delete(struct memory_container_cmd __user *user_cmd)
+{
+    int task_id = current->pid;
+    struct p_container *curr_container;
+    struct p_cont_task* task_head = NULL, *next = NULL;
+    struct p_cont_task *temp = NULL;
+    struct list_head *pos, *t;
+
+    //printk(KERN_ERR "We want to delete the task with task id %d \n", task_id);
+
+    // Entering critical section.
+    curr_container = find_container_by_task();
+    // This if condition should never get called
+    if (curr_container == NULL)
+    {
+        printk(KERN_ERR "Container does not exist");
+        return 1;
+    }
+    mutex_lock(&container_lock);
+
+    task_head = curr_container->task_head;
+
+    // Iterate over task list to find the task that must be deleted.
+    // Delete it and decrement the task_counter of the corresponding container.
+    list_for_each_safe(pos, t, &(task_head->list))
+    {
+        temp = list_entry(pos, struct p_cont_task, list);
+        if (temp->tid == task_id) {
+            list_del(pos);
+            printk("Deleting item with tid %lu \n", temp->tid);
+            curr_container->task_counter--;
+            delete_container_if_empty(curr_container);
+            kfree(temp);
+            break;
+        }
+    }
+    mutex_unlock(&container_lock);
+    // Critical section ends.
+    return 0;
+}
+
+/**
+ * Add a task to the given container
+ * Tasks are stored in kernel's built-in linked lists.
+ * We have a pointer to the p_cont_task in the container,
+ * which stores the circular doubly linked list of tasks
+ */
+void add_task(struct p_container *cont)
+{
+    struct p_cont_task *temp = NULL;
+    struct p_cont_task *task_head = NULL;
+
+    //TODO: Delete the debugging comments later
+
+    // Create temp which will hold the current task's value that we wish to
+    // associate with the container
+    temp = (struct p_cont_task*)
+	    kmalloc(sizeof(struct p_cont_task), GFP_KERNEL);
+    temp->tid = current->pid;
+    // Using INIT_LIST_HEAD will make temp point to itself thus creating a
+    // circular doubly linked list with one element. This could have been omitted
+    // but it's better to handle everything.
+    INIT_LIST_HEAD(&(temp->list));
+
+    // If the container does not have any task associated with it yet,
+    // the task_list within it will be empty. We need to initialize it.
+    if (cont->task_head == NULL)
+    {
+	    task_head = (struct p_cont_task*)
+	    kmalloc(sizeof(struct p_cont_task), GFP_KERNEL);
+
+	    // INIT_LIST_HEAD will make. This initialized a dynamically allocated
+	    // linked list head. It'll make task_head point to itself thus creating
+        // a circular doubly linked list with one element
+        INIT_LIST_HEAD(&task_head->list);
+        list_add(&(temp->list), &(task_head->list));
+        cont->task_head = task_head;
+    }
+    else {
+        list_add(&(temp->list), &(cont->task_head->list));
+    }
+    printk(KERN_INFO "Added task with TID : %d to container with CID: %lu\n",current->pid,cont->cid);
+    cont->task_counter++;
+}
+
+struct p_container *add_container(unsigned long cid)
+{
+    struct p_container *c;
+
+    c = kmalloc(sizeof(struct p_container), GFP_KERNEL);
+
+    if (c == NULL)
+        {
+            printk(KERN_ERR "Error in allocating memory for container with CID %d",
+                   cid);
+            return NULL;
+        }
+    c->cid=cid;
+    /* Initializing task_counter = 0 and task_head = NULL since this container
+     ** has no tasks associated yet.
+     */
+    c->task_counter = 0;
+    c->task_head = NULL;
+    INIT_LIST_HEAD(&(c->c_list));
+    list_add(&(c->c_list), &container_list);
+
+    printk(KERN_INFO "After adding container");
+    display();
+    return c;
+}
 
 
 int memory_container_mmap(struct file *filp, struct vm_area_struct *vma)
@@ -70,14 +287,27 @@ int memory_container_unlock(struct memory_container_cmd __user *user_cmd)
 }
 
 
-int memory_container_delete(struct memory_container_cmd __user *user_cmd)
+/*int memory_container_delete(struct memory_container_cmd __user *user_cmd)
 {
     return 0;
-}
+    }*/
 
 
 int memory_container_create(struct memory_container_cmd __user *user_cmd)
 {
+    mutex_lock(&container_lock);
+    struct memory_container_cmd cmd;
+    struct p_container* curr_container = NULL;
+
+    copy_from_user(&cmd, user_cmd, sizeof(struct memory_container_cmd));
+    printk(KERN_INFO "HAHA In create cid received %llu \n",cmd.cid);
+    curr_container = find_container(cmd.cid);
+    if (!curr_container)
+    {
+        curr_container = add_container(cmd.cid);
+    }
+    add_task(curr_container);
+    mutex_unlock(&container_lock);
     return 0;
 }
 
