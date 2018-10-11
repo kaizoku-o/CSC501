@@ -48,6 +48,12 @@
 
 int memory_container_mmap(struct file *filp, struct vm_area_struct *vma)
 {
+    printk(KERN_INFO "In memory_container_mmap\n");
+    printk(KERN_INFO "Start address is: %llu\n", vma->vm_start);
+    printk(KERN_INFO "End address is: %llu\n", vma->vm_end);
+    size_t length = vma->vm_end - vma->vm_start;
+    printk(KERN_INFO "Length is %d", length);
+    printk(KERN_INFO "Offset*getpagesize is: %ld", vma->vm_pgoff);
     return 0;
 }
 
