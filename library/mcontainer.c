@@ -47,6 +47,7 @@ int mcontainer_delete(int devfd)
  */
 int mcontainer_create(int devfd, int cid)
 {
+    printf("In mcontainer create\n");
     struct memory_container_cmd cmd;
     cmd.cid = cid;
     return ioctl(devfd, MCONTAINER_IOCTL_CREATE, &cmd);
@@ -57,7 +58,11 @@ int mcontainer_create(int devfd, int cid)
  */
 void *mcontainer_alloc(int devfd, __u64 offset, __u64 size)
 {
+    printf("In mcontainer alloc\n");
+    printf("getpagesize is %llu\n", getpagesize());
+    printf("size is %llu\n", size);
     __u64 aligned_size = ((size + getpagesize() - 1) / getpagesize()) * getpagesize();
+    printf("In mcontainer_alloc: offset*getpagesize(): %llu\n", offset*getpagesize());
     return mmap(0, aligned_size, PROT_READ | PROT_WRITE, MAP_SHARED, devfd, offset * getpagesize());
 }
 
