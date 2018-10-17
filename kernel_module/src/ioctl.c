@@ -51,6 +51,11 @@
 //extern  struct p_container* add_container(unsigned long cid);
 //extern struct list_head container_list;
 
+static LIST_HEAD(container_list);
+static LIST_HEAD(object_list);
+static DEFINE_MUTEX(container_lock);
+static DEFINE_MUTEX(object_lock);
+
 /*
  * Structure for tasks within a container
  */
@@ -71,7 +76,7 @@ struct p_container
     int task_counter;
     struct list_head c_list;
     /* List of objects */
-    struct list_head object_list;
+    //struct list_head object_list;
 };
 
 /**
@@ -80,28 +85,25 @@ struct p_container
 struct object
 {
     unsigned long oid;
+    unsigned long cid;
     char* data;
     struct list_head o_list;
 };
 
 
-struct object *find_object(struct p_container* curr_cont, unsigned long oid)
+struct object *find_object(unsigned long cid, unsigned long oid)
 {
-    struct p_container *c;
     struct object* obj;
     /* Traverse/loop through the linked list */
-    list_for_each_entry(obj, &(curr_cont->object_list), o_list)
+    list_for_each_entry(obj, &(object_list), o_list)
     {
-            if (obj->oid == oid)
+            if (obj->cid == cid && obj->oid == oid)
             {
                 return obj;
             }
     }
     return NULL;
 }
-
-static LIST_HEAD(container_list);
-static DEFINE_MUTEX(container_lock);
 
 struct p_container *find_container(unsigned long cid)
 {
@@ -283,7 +285,6 @@ struct p_container *add_container(unsigned long cid)
     c->task_counter = 0;
     c->task_head = NULL;
     INIT_LIST_HEAD(&(c->c_list));
-    INIT_LIST_HEAD(&(c->object_list));
     list_add(&(c->c_list), &container_list);
 
     printk(KERN_INFO "After adding container");
@@ -300,7 +301,7 @@ struct p_container *add_container(unsigned long cid)
 
 int memory_container_mmap(struct file *filp, struct vm_area_struct *vma)
 {
-    printk(KERN_INFO "In memory_container_mmap\n");
+    printk(KERN_INFO "HAHAHA In memory_container_mmap\n");
     printk(KERN_INFO "Start address is: %llu\n", vma->vm_start);
     printk(KERN_INFO "End address is: %llu\n", vma->vm_end);
     size_t length = vma->vm_end - vma->vm_start;
@@ -308,29 +309,39 @@ int memory_container_mmap(struct file *filp, struct vm_area_struct *vma)
     printk(KERN_INFO "Length is %d", length);
     printk(KERN_INFO "Offset*getpagesize is: %ld", vma->vm_pgoff);
 
+    printk(KERN_INFO "New and updated\n");
     struct p_container* curr_cont = find_container_by_task();
-    struct object* obj = find_object(curr_cont, vma->vm_pgoff);
+    unsigned long cid = curr_cont->cid;
+    struct object* obj = find_object(cid, vma->vm_pgoff);
     if (!obj)
     {
+        printk(KERN_INFO "Object does not exist");
         obj = kmalloc(sizeof(struct object), GFP_KERNEL);
         obj->data = kmalloc(length, GFP_KERNEL);
-        unsigned long pfn = virt_to_phys((void *) obj->data)>>PAGE_SHIFT;
-        remap_pfn_range(vma, vma->vm_start, pfn, length, vma->vm_page_prot);
         obj->oid = vma->vm_pgoff;
-        list_add(&(obj->o_list), &(curr_cont->object_list));
+        obj->cid = cid;
+        list_add(&(obj->o_list), &(object_list));
     }
-    return obj->data;
+    else
+        printk(KERN_INFO "Object exists\n");
+
+    unsigned long pfn = virt_to_phys((void *) obj->data)>>PAGE_SHIFT;
+    remap_pfn_range(vma, vma->vm_start, pfn, length, vma->vm_page_prot);
+
+    return 0;
 }
 
 
 int memory_container_lock(struct memory_container_cmd __user *user_cmd)
 {
+    mutex_lock(&object_lock);
     return 0;
 }
 
 
 int memory_container_unlock(struct memory_container_cmd __user *user_cmd)
 {
+    mutex_unlock(&object_lock);
     return 0;
 }
 
