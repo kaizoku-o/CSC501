@@ -127,11 +127,11 @@ int main(int argc, char *argv[])
         {
             sprintf(data, "%s%d", data, a);
         }
-        //strncpy(mapped_data, data, max_size_of_objects-1);
-        //mapped_data[max_size_of_objects-1] = '\0';
+        strncpy(mapped_data, data, max_size_of_objects-1);
+        mapped_data[max_size_of_objects-1] = '\0';
         
         // prints out the result into the log
-        //fprintf(fp, "S\t%d\t%d\t%ld\t%d\t%d\t%s\n", getpid(), cid, current_time.tv_sec * 1000000 + current_time.tv_usec, i, max_size_of_objects, mapped_data);
+        fprintf(fp, "S\t%d\t%d\t%ld\t%d\t%d\t%s\n", getpid(), cid, current_time.tv_sec * 1000000 + current_time.tv_usec, i, max_size_of_objects, mapped_data);
         mcontainer_unlock(devfd, i);
         memset(data, 0, max_size_of_objects_with_buffer);
     }
@@ -141,7 +141,7 @@ int main(int argc, char *argv[])
     mcontainer_lock(devfd, i);
     gettimeofday(&current_time, NULL);
     mcontainer_free(devfd, i);
-    //fprintf(fp, "D\t%d\t%d\t%ld\t%d\t%d\t%s\n", getpid(), cid, current_time.tv_sec * 1000000 + current_time.tv_usec, i, max_size_of_objects, "delete_an_object");
+    fprintf(fp, "D\t%d\t%d\t%ld\t%d\t%d\t%s\n", getpid(), cid, current_time.tv_sec * 1000000 + current_time.tv_usec, i, max_size_of_objects, "delete_an_object");
     mcontainer_unlock(devfd, i);
     
     

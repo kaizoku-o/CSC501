@@ -302,20 +302,20 @@ struct p_container *add_container(unsigned long cid)
 int memory_container_mmap(struct file *filp, struct vm_area_struct *vma)
 {
     printk(KERN_INFO "HAHAHA In memory_container_mmap\n");
-    printk(KERN_INFO "Start address is: %llu\n", vma->vm_start);
-    printk(KERN_INFO "End address is: %llu\n", vma->vm_end);
+    //printk(KERN_INFO "Start address is: %llu\n", vma->vm_start);
+    //printk(KERN_INFO "End address is: %llu\n", vma->vm_end);
     size_t length = vma->vm_end - vma->vm_start;
 
-    printk(KERN_INFO "Length is %d", length);
+    //printk(KERN_INFO "Length is %d", length);
     printk(KERN_INFO "Offset*getpagesize is: %ld", vma->vm_pgoff);
 
-    printk(KERN_INFO "New and updated\n");
+    //printk(KERN_INFO "New and updated\n");
     struct p_container* curr_cont = find_container_by_task();
     unsigned long cid = curr_cont->cid;
     struct object* obj = find_object(cid, vma->vm_pgoff);
     if (!obj)
     {
-        printk(KERN_INFO "Object does not exist");
+        printk(KERN_INFO "Object does not exist \n");
         obj = kmalloc(sizeof(struct object), GFP_KERNEL);
         obj->data = kmalloc(length, GFP_KERNEL);
         obj->oid = vma->vm_pgoff;
@@ -373,6 +373,36 @@ int memory_container_create(struct memory_container_cmd __user *user_cmd)
 
 int memory_container_free(struct memory_container_cmd __user *user_cmd)
 {
+    printk(KERN_INFO "In memory_container_free\n");
+    //container lock is not needed as there will never be a scenario where we are trying to free and obj from an container & deleting a container at the same time
+    struct memory_container_cmd cmd;
+    struct p_container* curr_container = NULL;
+    struct object* obj = NULL, *temp=NULL;
+    struct list_head *pos,*t;
+
+    curr_container = find_container_by_task();
+    if(curr_container == NULL)
+    {
+        printk(KERN_ERR "Container does not exist\n");
+        return 1;
+    }
+    obj = find_object(curr_container->cid,cmd.oid);
+    if(!obj)
+    {
+        printk(KERN_ERR "Object id %d does not exist in container to free \n",cmd.oid,curr_container->cid);
+        return 1;
+    }
+    list_for_each_safe(pos,t,&object_list)
+    {
+        temp = list_entry(pos,struct object, o_list);
+        if(temp->cid==curr_container->cid && temp->oid == cmd.oid)
+        {
+            list_del(pos);
+            printk("Deleting object with id %d from container %d ",curr_container->cid,cmd.oid);
+            kfree(temp);
+            break;
+        }
+    }    
     return 0;
 }
 
