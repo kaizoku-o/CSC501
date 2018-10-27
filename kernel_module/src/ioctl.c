@@ -192,6 +192,8 @@ int memory_container_delete(struct memory_container_cmd __user *user_cmd)
     //printk(KERN_ERR "We want to delete the task with task id %d \n", task_id);
 
     // Entering critical section.
+
+    mutex_lock(&container_lock);
     curr_container = find_container_by_task();
     // This if condition should never get called
     if (curr_container == NULL)
@@ -199,7 +201,7 @@ int memory_container_delete(struct memory_container_cmd __user *user_cmd)
         printk(KERN_ERR "Container does not exist");
         return 1;
     }
-    mutex_lock(&container_lock);
+    //mutex_lock(&container_lock);
 
     task_head = curr_container->task_head;
 
@@ -310,6 +312,8 @@ int memory_container_mmap(struct file *filp, struct vm_area_struct *vma)
     printk(KERN_INFO "Offset*getpagesize is: %ld", vma->vm_pgoff);
 
     //printk(KERN_INFO "New and updated\n");
+
+    mutex_lock(&container_lock);
     struct p_container* curr_cont = find_container_by_task();
     unsigned long cid = curr_cont->cid;
     struct object* obj = find_object(cid, vma->vm_pgoff);
@@ -327,6 +331,7 @@ int memory_container_mmap(struct file *filp, struct vm_area_struct *vma)
 
     unsigned long pfn = virt_to_phys((void *) obj->data)>>PAGE_SHIFT;
     remap_pfn_range(vma, vma->vm_start, pfn, length, vma->vm_page_prot);
+    mutex_unlock(&container_lock);
 
     return 0;
 }
@@ -380,6 +385,7 @@ int memory_container_free(struct memory_container_cmd __user *user_cmd)
     struct object* obj = NULL, *temp=NULL;
     struct list_head *pos,*t;
 
+    copy_from_user(&cmd, user_cmd, sizeof(struct memory_container_cmd));
     curr_container = find_container_by_task();
     if(curr_container == NULL)
     {
@@ -398,7 +404,7 @@ int memory_container_free(struct memory_container_cmd __user *user_cmd)
         if(temp->cid==curr_container->cid && temp->oid == cmd.oid)
         {
             list_del(pos);
-            printk("Deleting object with id %d from container %d ",curr_container->cid,cmd.oid);
+            printk("Deleting object with id %d from container %d \n ", cmd.oid,  curr_container->cid);
             kfree(temp);
             break;
         }
