@@ -74,6 +74,7 @@ struct p_container
     struct p_cont_task* task_head;
     /* Task counter */
     int task_counter;
+    int obj_counter;
     struct list_head c_list;
     /* List of objects */
     //struct list_head object_list;
@@ -162,14 +163,15 @@ bool delete_container_if_empty(struct p_container *curr_container)
     struct p_container* tmp;
 
     // Iterate over the container_list to find the curr_container.
-    // Delete it if all tasks in it have been deleted, i.e. task_counter = 0
+    // Delete it if all tasks and all objects in it have been deleted,
+    // i.e. task_counter = 0 && obj_counter = 0
     list_for_each_safe(pos, q, &container_list)
     {
         tmp = list_entry(pos, struct p_container, c_list);
 
         //printk(KERN_INFO "Container task counter is %d", tmp->task_counter);
         if ((tmp->cid == curr_container->cid)
-            && (tmp->task_counter == 0))
+            && (tmp->task_counter == 0) && tmp->obj_counter == 0)
         {
             list_del(pos);
             printk(KERN_INFO "Deleted container with id: %lu", tmp->cid);
@@ -243,8 +245,8 @@ void add_task(struct p_container *cont)
 	    kmalloc(sizeof(struct p_cont_task), GFP_KERNEL);
     temp->tid = current->pid;
     // Using INIT_LIST_HEAD will make temp point to itself thus creating a
-    // circular doubly linked list with one element. This could have been omitted
-    // but it's better to handle everything.
+    // circular doubly linked list with one element. This could have been
+    // omitted but it's better to handle everything.
     INIT_LIST_HEAD(&(temp->list));
 
     // If the container does not have any task associated with it yet,
@@ -285,6 +287,7 @@ struct p_container *add_container(unsigned long cid)
      ** has no tasks associated yet.
      */
     c->task_counter = 0;
+    c->obj_counter = 0;
     c->task_head = NULL;
     INIT_LIST_HEAD(&(c->c_list));
     list_add(&(c->c_list), &container_list);
@@ -330,6 +333,7 @@ int memory_container_mmap(struct file *filp, struct vm_area_struct *vma)
         obj->oid = vma->vm_pgoff;
         obj->cid = cid;
         list_add(&(obj->o_list), &(object_list));
+        curr_cont->obj_counter++;
     }
     else
         printk(KERN_INFO "Object exists\n");
@@ -409,6 +413,7 @@ int memory_container_free(struct memory_container_cmd __user *user_cmd)
                    cmd.oid,  curr_container->cid);
             kfree(temp->data);
             kfree(temp);
+            curr_container->obj_counter--;
             break;
         }
     }
