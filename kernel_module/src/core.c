@@ -45,7 +45,8 @@
 #include <linux/sched.h>
 
 extern struct miscdevice memory_container_dev;
-
+extern bool delete_container_if_empty(struct p_container*);
+extern void delete_objects(void);
 
 int memory_container_init(void)
 {
@@ -65,5 +66,9 @@ int memory_container_init(void)
 
 void memory_container_exit(void)
 {
+    printk(KERN_INFO "In memory container exit");
+    delete_objects();
+    delete_container_if_empty(NULL);
+    printk(KERN_ERR "After call to delete");
     misc_deregister(&memory_container_dev);
 }

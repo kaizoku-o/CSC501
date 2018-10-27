@@ -162,6 +162,9 @@ bool delete_container_if_empty(struct p_container *curr_container)
     struct list_head *pos, *q;
     struct p_container* tmp;
 
+    printk(KERN_INFO "In delete container if empty");
+    printk(KERN_INFO "curr_container is %p", curr_container);
+
     // Iterate over the container_list to find the curr_container.
     // Delete it if all tasks and all objects in it have been deleted,
     // i.e. task_counter = 0 && obj_counter = 0
@@ -170,11 +173,17 @@ bool delete_container_if_empty(struct p_container *curr_container)
         tmp = list_entry(pos, struct p_container, c_list);
 
         //printk(KERN_INFO "Container task counter is %d", tmp->task_counter);
-        if ((tmp->cid == curr_container->cid)
-            && (tmp->task_counter == 0) && tmp->obj_counter == 0)
+        if (!curr_container || ((tmp->cid == curr_container->cid)
+                                && (tmp->task_counter == 0)
+                                && tmp->obj_counter == 0))
         {
+            if (curr_container)
+                printk(KERN_INFO "Curr container exists");
+            else
+                printk(KERN_INFO "cont does not exist");
+
             list_del(pos);
-            printk(KERN_INFO "Deleted container with id: %lu", tmp->cid);
+            printk(KERN_ERR "Deleted container with id: %lu", tmp->cid);
             kfree(tmp);
             //display();
             return true;
@@ -384,6 +393,21 @@ int memory_container_create(struct memory_container_cmd __user *user_cmd)
     return 0;
 }
 
+void delete_objects(void)
+{
+    struct object* temp = NULL;
+    struct list_head *pos, *t;
+    printk(KERN_ERR "In delete objects");
+    list_for_each_safe(pos, t, &object_list)
+    {
+        temp = list_entry(pos, struct object, o_list);
+        printk(KERN_INFO "Deleted object with oid:cid %llu:%lu",
+               temp->oid, temp->cid);
+        list_del(pos);
+        kfree(temp->data);
+        kfree(temp);
+    }
+}
 
 int memory_container_free(struct memory_container_cmd __user *user_cmd)
 {
@@ -403,7 +427,7 @@ int memory_container_free(struct memory_container_cmd __user *user_cmd)
         printk(KERN_ERR "Container does not exist\n");
         return 1;
     }
-    list_for_each_safe(pos,t,&object_list)
+    list_for_each_safe(pos, t, &object_list)
     {
         temp = list_entry(pos, struct object, o_list);
         if(temp->cid == curr_container->cid && temp->oid == cmd.oid)
