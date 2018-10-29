@@ -317,7 +317,7 @@ int memory_container_mmap(struct file *filp, struct vm_area_struct *vma)
 {
     size_t length = 0;
     struct p_container* curr_cont = NULL;
-    unsigned long cid = 0, pfn = 0;
+    unsigned long cid = 0, oid = 0, pfn = 0;
     struct object* obj = NULL;
 
     printk(KERN_INFO "HAHAHA In memory_container_mmap\n");
@@ -325,7 +325,7 @@ int memory_container_mmap(struct file *filp, struct vm_area_struct *vma)
     //printk(KERN_INFO "End address is: %llu\n", vma->vm_end);
     length = vma->vm_end - vma->vm_start;
 
-    //printk(KERN_INFO "Length is %d", length);
+    printk(KERN_INFO "Length is %d", length);
     printk(KERN_INFO "Offset*getpagesize is: %ld", vma->vm_pgoff);
 
     //printk(KERN_INFO "New and updated\n");
@@ -333,13 +333,15 @@ int memory_container_mmap(struct file *filp, struct vm_area_struct *vma)
     mutex_lock(&container_lock);
     curr_cont = find_container_by_task();
     cid = curr_cont->cid;
-    obj = find_object(cid, vma->vm_pgoff);
+    oid = vma->vm_pgoff;
+    obj = find_object(cid, oid);
     if (!obj)
     {
         printk(KERN_INFO "Object does not exist \n");
         obj = kmalloc(sizeof(struct object), GFP_KERNEL);
-        obj->data = kmalloc(length, GFP_KERNEL);
-        obj->oid = vma->vm_pgoff;
+        // Using kzalloc to initialize to 0s
+        obj->data = kzalloc(length, GFP_KERNEL);
+        obj->oid = oid;
         obj->cid = cid;
         list_add(&(obj->o_list), &(object_list));
         curr_cont->obj_counter++;
