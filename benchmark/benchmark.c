@@ -107,9 +107,7 @@ int main(int argc, char *argv[])
     for (i = 0; i < number_of_objects; i++)
     {
         mcontainer_lock(devfd, i);
-        printf("Before mcontainer_alloc\n");
         mapped_data = (char *)mcontainer_alloc(devfd, i, max_size_of_objects);
-        //printf("Mapped data value is %s\n", mapped_data);
 
         // error handling
         if (!mapped_data)
@@ -140,7 +138,6 @@ int main(int argc, char *argv[])
     i = rand() % number_of_objects;
     mcontainer_lock(devfd, i);
     gettimeofday(&current_time, NULL);
-    printf("Benchmark mcontainer_free called for %d\n", i);
     mcontainer_free(devfd, i);
     fprintf(fp, "D\t%d\t%d\t%ld\t%d\t%d\t%s\n", getpid(), cid, current_time.tv_sec * 1000000 + current_time.tv_usec, i, max_size_of_objects, "delete_an_object");
     mcontainer_unlock(devfd, i);

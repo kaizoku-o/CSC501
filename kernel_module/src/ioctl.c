@@ -46,11 +46,6 @@
 #include <linux/kthread.h>
 #include <linux/list.h>
 
-//extern struct p_container p_cont;
-//extern struct p_container* find_container(unsigned long cid);
-//extern  struct p_container* add_container(unsigned long cid);
-//extern struct list_head container_list;
-
 static LIST_HEAD(container_list);
 static LIST_HEAD(object_list);
 static DEFINE_MUTEX(container_lock);
@@ -74,10 +69,9 @@ struct p_container
     struct p_cont_task* task_head;
     /* Task counter */
     int task_counter;
+    /* Object counter */
     int obj_counter;
     struct list_head c_list;
-    /* List of objects */
-    //struct list_head object_list;
 };
 
 /**
@@ -111,12 +105,12 @@ struct p_container *find_container(unsigned long cid)
     struct p_container *c;
     /* Traverse/loop through the linked list */
     list_for_each_entry(c, &container_list, c_list)
+    {
+        if (c->cid==cid)
         {
-            if (c->cid==cid)
-                {
-                    return c;
-                }
+            return c;
         }
+    }
     return NULL;
 }
 
@@ -129,7 +123,8 @@ void display(void) {
     struct list_head* pos;
 
     printk(KERN_ERR "Printing container list\n");
-    list_for_each(pos, &container_list) {
+    list_for_each(pos, &container_list)
+    {
         tmp_cont = list_entry(pos, struct p_container, c_list);
         printk(KERN_INFO "Container id: %lu\n", tmp_cont->cid);
     }
@@ -162,8 +157,8 @@ bool delete_container_if_empty(struct p_container *curr_container)
     struct list_head *pos, *q;
     struct p_container* tmp;
 
-    printk(KERN_INFO "In delete container if empty");
-    printk(KERN_INFO "curr_container is %p", curr_container);
+    //printk(KERN_INFO "In delete container if empty");
+    //printk(KERN_INFO "curr_container is %p", curr_container);
 
     // Iterate over the container_list to find the curr_container.
     // Delete it if all tasks and all objects in it have been deleted,
@@ -173,17 +168,20 @@ bool delete_container_if_empty(struct p_container *curr_container)
         tmp = list_entry(pos, struct p_container, c_list);
 
         //printk(KERN_INFO "Container task counter is %d", tmp->task_counter);
+        // curr_container absence short circuits this condition. If
+        // curr_container is 0 this function infers that we have to delete all
+        // the containers and deletes them.
         if (!curr_container || ((tmp->cid == curr_container->cid)
                                 && (tmp->task_counter == 0)
                                 && tmp->obj_counter == 0))
         {
-            if (curr_container)
-                printk(KERN_INFO "Curr container exists");
-            else
-                printk(KERN_INFO "cont does not exist");
+            //if (curr_container)
+            //  printk(KERN_INFO "Curr container exists");
+            //else
+            //  printk(KERN_INFO "cont does not exist");
 
             list_del(pos);
-            printk(KERN_ERR "Deleted container with id: %lu", tmp->cid);
+            //printk(KERN_ERR "Deleted container with id: %lu", tmp->cid);
             kfree(tmp);
             //display();
             return true;
@@ -203,13 +201,12 @@ int memory_container_delete(struct memory_container_cmd __user *user_cmd)
     //printk(KERN_ERR "We want to delete the task with task id %d \n", task_id);
 
     // Entering critical section.
-
     mutex_lock(&container_lock);
     curr_container = find_container_by_task();
     // This if condition should never get called
     if (curr_container == NULL)
     {
-        printk(KERN_ERR "Container does not exist");
+        //printk(KERN_ERR "Container does not exist");
         return 1;
     }
     //mutex_lock(&container_lock);
@@ -223,7 +220,7 @@ int memory_container_delete(struct memory_container_cmd __user *user_cmd)
         temp = list_entry(pos, struct p_cont_task, list);
         if (temp->tid == task_id) {
             list_del(pos);
-            printk("Deleting item with tid %d \n", temp->tid);
+            // printk("Deleting item with tid %d \n", temp->tid);
             curr_container->task_counter--;
             delete_container_if_empty(curr_container);
             kfree(temp);
@@ -245,8 +242,6 @@ void add_task(struct p_container *cont)
 {
     struct p_cont_task *temp = NULL;
     struct p_cont_task *task_head = NULL;
-
-    //TODO: Delete the debugging comments later
 
     // Create temp which will hold the current task's value that we wish to
     // associate with the container
@@ -275,7 +270,8 @@ void add_task(struct p_container *cont)
     else {
         list_add(&(temp->list), &(cont->task_head->list));
     }
-    printk(KERN_INFO "Added task with TID : %d to container with CID: %lu\n",current->pid,cont->cid);
+    // printk(KERN_INFO "Added task with TID : %d to container with CID: %lu\n",
+    //       current->pid,cont->cid);
     cont->task_counter++;
 }
 
@@ -320,13 +316,13 @@ int memory_container_mmap(struct file *filp, struct vm_area_struct *vma)
     unsigned long cid = 0, oid = 0, pfn = 0;
     struct object* obj = NULL;
 
-    printk(KERN_INFO "HAHAHA In memory_container_mmap\n");
+    //printk(KERN_INFO "***In memory_container_mmap***\n");
     //printk(KERN_INFO "Start address is: %llu\n", vma->vm_start);
     //printk(KERN_INFO "End address is: %llu\n", vma->vm_end);
     length = vma->vm_end - vma->vm_start;
 
-    printk(KERN_INFO "Length is %d", length);
-    printk(KERN_INFO "Offset*getpagesize is: %ld", vma->vm_pgoff);
+    //printk(KERN_INFO "Length is %d", length);
+    //printk(KERN_INFO "Offset*getpagesize is: %ld", vma->vm_pgoff);
 
     //printk(KERN_INFO "New and updated\n");
 
@@ -337,7 +333,7 @@ int memory_container_mmap(struct file *filp, struct vm_area_struct *vma)
     obj = find_object(cid, oid);
     if (!obj)
     {
-        printk(KERN_INFO "Object does not exist \n");
+        //printk(KERN_INFO "Object does not exist \n");
         obj = kmalloc(sizeof(struct object), GFP_KERNEL);
         // Using kzalloc to initialize to 0s
         obj->data = kzalloc(length, GFP_KERNEL);
@@ -346,8 +342,8 @@ int memory_container_mmap(struct file *filp, struct vm_area_struct *vma)
         list_add(&(obj->o_list), &(object_list));
         curr_cont->obj_counter++;
     }
-    else
-        printk(KERN_INFO "Object exists\n");
+    //else
+    //  printk(KERN_INFO "Object exists\n");
 
     pfn = virt_to_phys((void *) obj->data)>>PAGE_SHIFT;
     remap_pfn_range(vma, vma->vm_start, pfn, length, vma->vm_page_prot);
@@ -384,7 +380,7 @@ int memory_container_create(struct memory_container_cmd __user *user_cmd)
 
     mutex_lock(&container_lock);
     copy_from_user(&cmd, user_cmd, sizeof(struct memory_container_cmd));
-    printk(KERN_INFO "HAHA In create cid received %llu \n",cmd.cid);
+    //printk(KERN_INFO "***In create cid received %llu ***\n",cmd.cid);
     curr_container = find_container(cmd.cid);
     if (!curr_container)
     {
@@ -399,12 +395,12 @@ void delete_objects(void)
 {
     struct object* temp = NULL;
     struct list_head *pos, *t;
-    printk(KERN_ERR "In delete objects");
+    //printk(KERN_ERR "In delete objects");
     list_for_each_safe(pos, t, &object_list)
     {
         temp = list_entry(pos, struct object, o_list);
-        printk(KERN_INFO "Deleted object with oid:cid %llu:%lu",
-               temp->oid, temp->cid);
+        //printk(KERN_INFO "Deleted object with oid:cid %llu:%lu",
+        //     temp->oid, temp->cid);
         list_del(pos);
         kfree(temp->data);
         kfree(temp);
@@ -421,12 +417,12 @@ int memory_container_free(struct memory_container_cmd __user *user_cmd)
     struct object* temp = NULL;
     struct list_head *pos, *t;
 
-    printk(KERN_INFO "In memory_container_free\n");
+    //printk(KERN_INFO "In memory_container_free\n");
     copy_from_user(&cmd, user_cmd, sizeof(struct memory_container_cmd));
     curr_container = find_container_by_task();
     if(curr_container == NULL)
     {
-        printk(KERN_ERR "Container does not exist\n");
+        //printk(KERN_ERR "Container does not exist\n");
         return 1;
     }
     list_for_each_safe(pos, t, &object_list)
@@ -435,8 +431,8 @@ int memory_container_free(struct memory_container_cmd __user *user_cmd)
         if(temp->cid == curr_container->cid && temp->oid == cmd.oid)
         {
             list_del(pos);
-            printk("Deleting object with id %llu from container %lu \n ",
-                   cmd.oid,  curr_container->cid);
+            //printk("Deleting object with id %llu from container %lu \n ",
+            //     cmd.oid,  curr_container->cid);
             kfree(temp->data);
             kfree(temp);
             curr_container->obj_counter--;

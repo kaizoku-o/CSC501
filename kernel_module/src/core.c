@@ -66,9 +66,11 @@ int memory_container_init(void)
 
 void memory_container_exit(void)
 {
-    printk(KERN_INFO "In memory container exit");
+    //printk(KERN_INFO "In memory container exit");
     delete_objects();
+    // If Null is passed as the parameter instead of cid, then all containes
+    // are deleted.
     delete_container_if_empty(NULL);
-    printk(KERN_ERR "After call to delete");
+    //printk(KERN_ERR "After call to delete");
     misc_deregister(&memory_container_dev);
 }

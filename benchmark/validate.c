@@ -133,10 +133,7 @@ int main(int argc, char *argv[])
     {
         fprintf(stderr, "Container %d Pass\n", cid);
     }
-    else
-    {
-        fprintf(stderr, "Container %d Errors : %d\n",cid,error);
-    } 
+
     mcontainer_delete(devfd);
     
     close(devfd);
